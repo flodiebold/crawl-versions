@@ -148,5 +148,6 @@ class ChunkReader(object):
             raise SaveFileError("string beyond data")
         return result
 
-p = Package(sys.argv[1])
-print p.read_chr_chunk()[1]
+if __name__ == "__main__":
+    p = Package(sys.argv[1])
+    print p.read_chr_chunk()[1]
