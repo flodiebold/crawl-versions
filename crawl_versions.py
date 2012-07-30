@@ -57,11 +57,22 @@ def update_version(version):
         latest = call_git("describe", version["branch"], output=True).strip()
         present = revision_present(version["name"], latest)
         print "Latest", version["name"], "is", latest
+        
         compile_revision(version["name"], latest)
         version_dir = os.path.join(get_crawl_dir(), version["name"])
         os.symlink(latest, os.path.join(version_dir, "latest.new"))
         os.rename(os.path.join(version_dir, "latest.new"),
                   os.path.join(version_dir, "latest"))
+
+        bin_dir = os.path.join(base_dir, "bin")
+        if not os.path.isdir(bin_dir): os.makedirs(bin_dir)
+        bin_file = os.path.join(bin_dir, version["name"])
+        runner_script = os.path.join(script_dir, "crawl_runner.py")
+        if not os.path.isfile(bin_file):
+            with open(bin_file, "w") as f:
+                f.write("#!/bin/sh\n")
+                f.write(runner_script + ' "' + version["name"] + '" "$@"\n')
+            os.chmod(bin_file, 0755)
         return True
     except:
         print "Update of", version["name"], "failed!"
