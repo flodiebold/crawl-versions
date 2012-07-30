@@ -15,6 +15,7 @@ class Package(object):
     def __init__(self, filename):
         self.filename = filename
         self.directory = dict()
+        self.f = None
         self.load()
         
     def _read_file_header(self):
@@ -24,11 +25,14 @@ class Package(object):
         return Package.file_header.unpack(data)
 
     def load(self):
-        self.f = open(self.filename, "rb")
-        (self.magic, self.version, start) = self._read_file_header()
-        if self.magic != Package.package_magic:
-            raise SaveFileError("not a crawl save file")
-        self._read_directory(start, self.version)
+        try:
+            self.f = open(self.filename, "rb")
+            (self.magic, self.version, start) = self._read_file_header()
+            if self.magic != Package.package_magic:
+                raise SaveFileError("not a crawl save file")
+            self._read_directory(start, self.version)
+        except:
+            self.close()
 
     def _read_directory(self, start, version):
         if version != 1:
@@ -57,7 +61,15 @@ class Package(object):
             return None
 
     def close(self):
-        self.f.close()
+        if self.f:
+            self.f.close()
+            self.f = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
     def read_chr_chunk(self):
         chr_chunk = self.get("chr")
@@ -118,9 +130,9 @@ class ChunkReader(object):
             if self.zlib.unconsumed_tail:
                 decompressed += self.zlib.decompress(self.zlib.unconsumed_tail, l - len(decompressed))
             else:
-                data = self._raw_read(32768)
+                data = self._raw_read(1024)
                 decompressed += self.zlib.decompress(data, l - len(decompressed))
-                if len(data) < 32768:
+                if len(data) < 1024:
                     return decompressed
         return decompressed
     
