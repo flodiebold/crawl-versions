@@ -1,6 +1,6 @@
 #!/bin/env python
 
-import argparse, os, os.path, subprocess, yaml, traceback, sys
+import argparse, os, os.path, subprocess, yaml, traceback, sys, shutil
 import save_reader
 from common import *
 
@@ -33,9 +33,9 @@ def load_config():
             versions.append(data)
     return versions
 
-def compile_revision(version, revision):
+def compile_revision(version_name, revision):
     """Compiles the given revision for the given version."""
-    common_dir = os.path.join(get_crawl_dir(), version)
+    common_dir = os.path.join(get_crawl_dir(), version_name)
     revision_dir = os.path.join(common_dir, revision)
     if os.path.isdir(revision_dir): return # Already present
     
@@ -189,9 +189,41 @@ def blacklist(args):
     # TODO
     pass
 
+def remove_revision(version_name, revision):
+    """Deletes a revision."""
+    revision_dir = os.path.join(get_crawl_dir(), version_name, revision)
+    shutil.rmtree(revision_dir)
+
 def clean(args):
-    # TODO
-    pass
+    config = load_config()
+    if args.versions:
+        versions = args.versions
+    else:
+        versions = [v["name"] for v in config]
+
+    process_stats = process_statistics()
+
+    for version in config:
+        if version["name"] not in versions: continue
+
+        savefile_stats = savefile_statistics(version)
+        v_process_stats = process_stats.get(version["name"], dict())
+        revisions = installed_revisions(version)
+
+        latest = os.readlink(os.path.join(get_crawl_dir(), version["name"], "latest"))
+
+        print "Cleaning {0}...".format(version["name"])
+
+        for rev in revisions:
+            save_count = savefile_stats.get(rev, 0)
+            process_count = v_process_stats.get(rev, 0)
+            if save_count > 0 or process_count > 0: continue
+            if latest == rev: continue
+            print "Removing revision {0}...".format(rev)
+            remove_revision(version["name"], rev)
+
+        print
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage crawl versions.")
@@ -209,6 +241,7 @@ if __name__ == "__main__":
 
     parser_clean = subparsers.add_parser("clean", help="Remove unused versions and clear caches.")
     parser_clean.set_defaults(func=clean)
+    parser_clean.add_argument("-v", "--version", dest="versions", action="append")
 
     args = parser.parse_args()
     if args.func:
