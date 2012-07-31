@@ -71,7 +71,7 @@ def update_version(version):
         if not os.path.isfile(bin_file):
             with open(bin_file, "w") as f:
                 f.write("#!/bin/sh\n")
-                f.write(runner_script + ' "' + version["name"] + '" "$@"\n')
+                f.write("exec " + runner_script + ' "' + version["name"] + '" "$@"\n')
             os.chmod(bin_file, 0755)
         return True
     except:
