@@ -1,17 +1,20 @@
 #!/bin/env python
 
 import argparse, os, os.path, subprocess, yaml, traceback, sys
+import save_reader
 from common import *
 
 source_address = "git://gitorious.org/crawl/crawl.git"
 
 def call_git(command, *args, **kwargs):
+    """Simple wrapper function for running git commands."""
     if kwargs.get("output", False):
         return subprocess.check_output(["git", command] + list(args))
     else:
         subprocess.check_call(["git", command] + list(args))
 
 def init_source():
+    """Makes sure the crawl source is present, returns the directory."""
     source_dir = os.path.join(base_dir, "src")
     if os.path.isdir(source_dir): return source_dir
     print "Downloading crawl source..."
@@ -19,6 +22,7 @@ def init_source():
     return source_dir
 
 def load_config():
+    """Loads the version config files."""
     config_dir = os.path.join(base_dir, "crawl-versions.conf.d")
     versions = []
     for filename in os.listdir(config_dir):
@@ -30,9 +34,11 @@ def load_config():
     return versions
 
 def compile_revision(version, revision):
+    """Compiles the given revision for the given version."""
     common_dir = os.path.join(get_crawl_dir(), version)
     revision_dir = os.path.join(common_dir, revision)
-    if os.path.isdir(revision_dir): return
+    if os.path.isdir(revision_dir): return # Already present
+    
     source_dir = init_source()
     old_cwd = os.getcwd()
     os.chdir(os.path.join(source_dir, "crawl-ref", "source"))
@@ -52,18 +58,22 @@ def compile_revision(version, revision):
     finally:
         os.chdir(old_cwd)
 
-def update_version(version):
+def _update_version(version):
     try:
+        # Check latest revision and compile (if necessary)
         latest = call_git("describe", version["branch"], output=True).strip()
         present = revision_present(version["name"], latest)
         print "Latest", version["name"], "is", latest
-        
+
         compile_revision(version["name"], latest)
+
+        # Symlink latest to the newest version
         version_dir = os.path.join(get_crawl_dir(), version["name"])
         os.symlink(latest, os.path.join(version_dir, "latest.new"))
         os.rename(os.path.join(version_dir, "latest.new"),
                   os.path.join(version_dir, "latest"))
 
+        # Create runner script
         bin_dir = os.path.join(base_dir, "bin")
         if not os.path.isdir(bin_dir): os.makedirs(bin_dir)
         bin_file = os.path.join(bin_dir, version["name"])
@@ -86,8 +96,102 @@ def update(args):
     call_git("fetch", "--all")
     success = True
     for version in config:
-        success = success and update_version(version)
+        success = success and _update_version(version)
     return 0 if success else 1
+
+def savefile_revision(save_file):
+    """Determines the crawl revision with which the given save file was made."""
+    with save_reader.Package(save_file) as p:
+        p.read_chr_chunk()
+        return p.crawl_version
+
+def savefile_statistics(version):
+    """Counts save files for each revision of the version."""
+    save_dir = os.path.join(get_crawl_dir(), version["name"], "saves")
+    stats = dict()
+    for save_file in os.listdir(save_dir):
+        if not save_file.endswith(".cs"): continue
+        rev = savefile_revision(os.path.join(save_dir, save_file))
+        stats[rev] = 1 + stats.get(rev, 0)
+    return stats
+
+def installed_revisions(version):
+    """Returns a list of all revisions installed for a given version."""
+    version_dir = os.path.join(get_crawl_dir(), version["name"])
+    revisions = []
+    for path in os.listdir(version_dir):
+        if path in ["latest", "saves", "shared"]: continue
+        revisions.append(path)
+        
+    revisions.sort()
+    return revisions
+
+def find_crawl_processes():
+    """Searches for running processes of crawl binaries managed by this script."""
+    crawl_dir = os.path.realpath(get_crawl_dir())
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit(): continue
+        try:
+            exe_file = os.path.realpath(os.path.join("/proc", pid, "exe"))
+        except OSError:
+            continue
+
+        if exe_file.startswith(crawl_dir):
+            rel_path = os.path.relpath(exe_file, crawl_dir)
+            (version_name, revision) = rel_path.split(os.path.sep)[0:2]
+            yield (pid, version_name, revision)
+    
+def process_statistics():
+    """Counts the processes running for each revision of each version."""
+    stats = dict()
+    for pid, version_name, rev in find_crawl_processes():
+        version_stats = stats.get(version_name, dict())
+        stats[version_name] = version_stats
+        version_stats[rev] = 1 + version_stats.get(rev, 0)
+    return stats
+
+def list_revisions(args):
+    config = load_config()
+    if args.versions:
+        versions = args.versions
+    else:
+        versions = [v["name"] for v in config]
+
+    process_stats = process_statistics()
+
+    for version in config:
+        if version["name"] not in versions: continue
+
+        savefile_stats = savefile_statistics(version)
+        v_process_stats = process_stats.get(version["name"], dict())
+        revisions = installed_revisions(version)
+
+        print version["name"], "revisions:"
+
+        for rev in revisions:
+            save_count = savefile_stats.get(rev, 0)
+            process_count = v_process_stats.get(rev, 0)
+            print "{0} ({1} saves, {2} processes)".format(rev, save_count, process_count)
+            if rev in savefile_stats: del savefile_stats[rev]
+            if rev in v_process_stats: del v_process_stats[rev]
+
+        other_saves = sum(savefile_stats.values())
+        if other_saves:
+            print other_saves, "other savegames"
+
+        other_processes = sum(v_process_stats.values())
+        if other_processes:
+            print other_processes, "other processes"
+        
+        print
+
+def blacklist(args):
+    # TODO
+    pass
+
+def clean(args):
+    # TODO
+    pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage crawl versions.")
@@ -95,6 +199,16 @@ if __name__ == "__main__":
 
     parser_update = subparsers.add_parser("update", help="Update all branches.")
     parser_update.set_defaults(func=update)
+
+    parser_list = subparsers.add_parser("list", help="List revisions.")
+    parser_list.set_defaults(func=list_revisions)
+    parser_list.add_argument("-v", "--version", dest="versions", action="append")
+
+    parser_blacklist = subparsers.add_parser("blacklist", help="Blacklist revisions.")
+    parser_blacklist.set_defaults(func=blacklist)
+
+    parser_clean = subparsers.add_parser("clean", help="Remove unused versions and clear caches.")
+    parser_clean.set_defaults(func=clean)
 
     args = parser.parse_args()
     if args.func:
