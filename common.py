@@ -1,7 +1,7 @@
 import os, os.path
 
-base_dir = os.getcwd()
 script_dir = os.path.realpath(os.path.dirname(__file__))
+base_dir = script_dir
 
 def get_crawl_dir():
     return os.path.join(base_dir, "crawl")
