@@ -3,5 +3,6 @@
 /save_backups
 /changelogs
 /bin
+/crawl-versions.d
 *.pyc
 *~
