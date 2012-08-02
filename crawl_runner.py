@@ -9,7 +9,7 @@ def wait_key():
     getch.getch()
 
 def ask_upgrade():
-    print "Upgrade? [y/N]"
+    print "Upgrade? [Y/n]"
     answer = getch.getch()
     return ord(answer) not in set([ord("n"), ord("N"), 27])
 
