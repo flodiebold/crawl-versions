@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 
 import argparse, os, os.path, subprocess, yaml, traceback, sys, shutil, stat
 import save_reader
