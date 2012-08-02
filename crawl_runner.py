@@ -58,6 +58,10 @@ if __name__ == "__main__":
         print "A new version is available! Changelog:"
         print get_changelog(revision, latest)
         ask = True
+        # Check if blacklisted
+        exec_path = os.path.join(get_crawl_dir(), version_name, revision, "bin", "crawl")
+        if not os.access(exec_path, os.X_OK):
+            ask = False
         if ask:
             upgrade = ask_upgrade()
         else:

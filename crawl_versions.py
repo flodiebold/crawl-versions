@@ -1,6 +1,6 @@
 #!/bin/env python
 
-import argparse, os, os.path, subprocess, yaml, traceback, sys, shutil
+import argparse, os, os.path, subprocess, yaml, traceback, sys, shutil, stat
 import save_reader
 from common import *
 
@@ -169,9 +169,13 @@ def list_revisions(args):
         print version["name"], "revisions:"
 
         for rev in revisions:
+            # Check if blacklisted
+            exec_file = os.path.join(get_crawl_dir(), version["name"], rev, "bin", "crawl")
+            blacklisted = not os.access(exec_file, os.X_OK)
+
             save_count = savefile_stats.get(rev, 0)
             process_count = v_process_stats.get(rev, 0)
-            print "{0} ({1} saves, {2} processes)".format(rev, save_count, process_count)
+            print "{0} ({1} saves, {2} processes{3})".format(rev, save_count, process_count, ", blacklisted" if blacklisted else "")
             if rev in savefile_stats: del savefile_stats[rev]
             if rev in v_process_stats: del v_process_stats[rev]
 
@@ -186,8 +190,50 @@ def list_revisions(args):
         print
 
 def blacklist(args):
-    # TODO
-    pass
+    config = load_config()
+    if args.versions:
+        versions = args.versions
+    else:
+        versions = [v["name"] for v in config]
+
+    source_dir = init_source()
+    os.chdir(source_dir)
+    try:
+        rev_range_parsed = call_git("rev-parse", *args.data, output=True)
+    except subprocess.CalledProcessError:
+        sys.exit(1)
+    revs = rev_range_parsed.split()
+
+    if any(rev.startswith("^") for rev in revs):
+        ranges = True
+    else:
+        ranges = args.ranges
+
+    if ranges:
+        revs = call_git("rev-list", *revs, output=True).split()
+
+    for version in config:
+        if version["name"] not in versions: continue
+
+        revisions = installed_revisions(version)
+        latest = os.readlink(os.path.join(get_crawl_dir(), version["name"], "latest"))
+        blacklist = []
+        for rev in revisions:
+            rev_id = call_git("rev-parse", rev, output=True).strip()
+            if rev_id not in revs: continue
+            if rev == latest:
+                print "This would blacklist the latest version of {0} ({1})! Aborting.".format(version["name"], rev)
+                sys.exit(1)
+
+            blacklist.append(rev)
+
+        for rev in blacklist:
+            print "Blacklisting {0}...".format(rev)
+            exec_file = os.path.join(get_crawl_dir(), version["name"], rev, "bin", "crawl")
+            # Remove exec bit
+            mode = os.stat(exec_file).st_mode
+            os.chmod(exec_file, mode & ~(stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH))
+            
 
 def remove_revision(version_name, revision):
     """Deletes a revision."""
@@ -237,7 +283,11 @@ if __name__ == "__main__":
     parser_list.add_argument("-v", "--version", dest="versions", action="append")
 
     parser_blacklist = subparsers.add_parser("blacklist", help="Blacklist revisions.")
-    parser_blacklist.set_defaults(func=blacklist)
+    parser_blacklist.set_defaults(func=blacklist, ranges=False)
+    parser_blacklist.add_argument("data", nargs="+")
+    parser_blacklist.add_argument("-v", "--version", dest="versions", action="append")
+    parser_blacklist.add_argument("-r", "--ranges", dest="ranges", const=True, action="store_const")
+    parser_blacklist.add_argument("--revisions", dest="ranges", const=False, action="store_const")
 
     parser_clean = subparsers.add_parser("clean", help="Remove unused versions and clear caches.")
     parser_clean.set_defaults(func=clean)
