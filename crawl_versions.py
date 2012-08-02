@@ -23,7 +23,11 @@ def init_source():
 
 def load_config():
     """Loads the version config files."""
-    config_dir = os.path.join(base_dir, "crawl-versions.conf.d")
+    config_dir = os.path.join(base_dir, "crawl-versions.d")
+    if not os.path.isdir(config_dir):
+        print "Couldn't find the configuration directory!"
+        print "(Maybe copy from crawl-versions.d.example?)"
+        sys.exit(1)
     versions = []
     for filename in os.listdir(config_dir):
         if not filename.endswith(".yml"): continue
