@@ -4,6 +4,8 @@ import os, os.path, sys, subprocess
 import save_reader, getch
 from common import *
 
+game_modes = ["sprint", "zotdef"]
+
 def wait_key():
     getch.getch()
 
@@ -25,7 +27,11 @@ def parse_args():
     webtiles_compat = "-await-connection" in sys.argv
     name_index = sys.argv.index("-name")
     name = sys.argv[name_index + 1]
-    return (version_name, name, webtiles_compat)
+    mode = ""
+    for game_mode in game_modes:
+        if ("-" + game_mode) in sys.argv:
+            mode = game_mode
+    return (version_name, name, webtiles_compat, mode)
 
 def get_changelog(from_rev, to_rev):
     source_dir = os.path.join(base_dir, "src")
@@ -48,9 +54,14 @@ def get_changelog(from_rev, to_rev):
     return changelog
 
 if __name__ == "__main__":
-    version_name, name, webtiles_compat = parse_args()
+    version_name, name, webtiles_compat, game_mode = parse_args()
     latest = os.readlink(os.path.join(get_crawl_dir(), version_name, "latest"))
-    save_file = os.path.join(get_crawl_dir(), version_name, "saves", name + ".cs")
+    save_dir = os.path.join(get_crawl_dir(), version_name, "saves")
+    if game_mode:
+        save_file = os.path.join(save_dir, game_mode, name + ".cs")
+    else:
+        save_file = os.path.join(save_dir, name + ".cs")
+
     if os.path.isfile(save_file):
         with save_reader.Package(save_file) as p:
             p.read_chr_chunk()
