@@ -4,8 +4,6 @@ import os, os.path, sys, subprocess
 import save_reader, getch
 from common import *
 
-game_modes = ["sprint", "zotdef"]
-
 def wait_key():
     getch.getch()
 

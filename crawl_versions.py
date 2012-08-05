@@ -113,10 +113,13 @@ def savefile_statistics(version):
     """Counts save files for each revision of the version."""
     save_dir = os.path.join(get_crawl_dir(), version["name"], "saves")
     stats = dict()
-    for save_file in os.listdir(save_dir):
-        if not save_file.endswith(".cs"): continue
-        rev = savefile_revision(os.path.join(save_dir, save_file))
-        stats[rev] = 1 + stats.get(rev, 0)
+    for game_mode in [None] + game_modes:
+        mode_save_dir = os.path.join(save_dir, game_mode) if game_mode else save_dir
+        if not os.path.isdir(mode_save_dir): continue
+        for save_file in os.listdir(mode_save_dir):
+            if not save_file.endswith(".cs"): continue
+            rev = savefile_revision(os.path.join(mode_save_dir, save_file))
+            stats[rev] = 1 + stats.get(rev, 0)
     return stats
 
 def installed_revisions(version):
