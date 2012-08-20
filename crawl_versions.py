@@ -37,11 +37,21 @@ def load_config():
             versions.append(data)
     return versions
 
+def _find_major_version():
+    line_start = "#define TAG_MAJOR_VERSION"
+    with open("tag-version.h", "r") as f:
+        for l in f.readlines():
+            if l.startswith(line_start):
+                mv = int(l[len(line_start):].strip())
+                return mv
+    return None
+
 def compile_revision(version_name, revision):
-    """Compiles the given revision for the given version."""
+    """Compiles the given revision for the given version.
+    Returns the major version tag."""
     common_dir = os.path.join(get_crawl_dir(), version_name)
     revision_dir = os.path.join(common_dir, revision)
-    if os.path.isdir(revision_dir): return # Already present
+    if os.path.isdir(revision_dir): return None # Already present
     
     source_dir = init_source()
     old_cwd = os.getcwd()
@@ -59,6 +69,7 @@ def compile_revision(version_name, revision):
                    "clean",
                    "install"]
         subprocess.check_call(command)
+        return _find_major_version()
     finally:
         os.chdir(old_cwd)
 
@@ -69,13 +80,19 @@ def _update_version(version):
         present = revision_present(version["name"], latest)
         print "Latest", version["name"], "is", latest
 
-        compile_revision(version["name"], latest)
+        major_version = compile_revision(version["name"], latest)
 
         # Symlink latest to the newest version
         version_dir = os.path.join(get_crawl_dir(), version["name"])
         os.symlink(latest, os.path.join(version_dir, "latest.new"))
         os.rename(os.path.join(version_dir, "latest.new"),
                   os.path.join(version_dir, "latest"))
+
+        # Symlink latest-{major_version} to this version
+        if major_version:
+            os.symlink(latest, os.path.join(version_dir, "latest.new"))
+            os.rename(os.path.join(version_dir, "latest.new"),
+                      os.path.join(version_dir, "latest-{}".format(major_version)))
 
         # Create runner script
         bin_dir = os.path.join(base_dir, "bin")
@@ -127,7 +144,8 @@ def installed_revisions(version):
     version_dir = os.path.join(get_crawl_dir(), version["name"])
     revisions = []
     for path in os.listdir(version_dir):
-        if path in ["latest", "saves", "shared"]: continue
+        if path in ["saves", "shared"]: continue
+        if path.startswith("latest"): continue
         revisions.append(path)
         
     revisions.sort()

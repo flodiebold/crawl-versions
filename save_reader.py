@@ -77,6 +77,7 @@ class Package(object):
         chr_chunk.read(4) # length of the remaining data
         if version >= (32, 13):
             chr_chunk.read(1) # format
+        self.major_version = version[0]
         self.player_name = chr_chunk.read_byte_string()
         self.crawl_version = chr_chunk.read_byte_string()
         return (self.player_name, self.crawl_version)

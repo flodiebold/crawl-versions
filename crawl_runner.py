@@ -64,8 +64,14 @@ if __name__ == "__main__":
         with save_reader.Package(save_file) as p:
             p.read_chr_chunk()
             revision = p.crawl_version
+            major_version = p.major_version
+            latest_link = os.path.join(get_crawl_dir(), version_name,
+                                       "latest-{}".format(major_version))
+            if os.path.islink(latest_link):
+                latest = os.readlink(latest_link)
     else:
         revision = latest
+        major_version = None
 
     if not revision_present(version_name, revision):
         if not webtiles_compat: print "Revision unavailable! Forcing upgrade."
