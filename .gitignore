@@ -4,5 +4,8 @@
 /changelogs
 /bin/crawl-*
 /crawl-versions.d
+/links
+/rc-links
+/rcs
 *.pyc
 *~

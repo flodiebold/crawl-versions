@@ -2,3 +2,5 @@ defaults:
   dgl-inprogress-dir: inprogress/{name}
   ttyrec-dir: ttyrecs/{username}
   rcfile-dir: rcs/{name}
+  scoring-link-dir: links/{name}
+  rcfile-dir-link: rc-links/{name}

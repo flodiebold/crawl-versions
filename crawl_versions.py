@@ -44,6 +44,11 @@ def load_base_config():
         contents = f.read()
         return yaml.load(contents)
 
+def get_path(key, config, version, **kwargs):
+    template = version.get(key, None)
+    template = template or config.get("defaults", {}).get(key, None)
+    return template and template.format(name=version["name"], **kwargs)
+
 def _find_major_version():
     line_start = "#define TAG_MAJOR_VERSION"
     with open("tag-version.h", "r") as f:
@@ -80,7 +85,8 @@ def compile_revision(version_name, revision):
     finally:
         os.chdir(old_cwd)
 
-def _update_version(version):
+def _update_version(version, config):
+    old_cwd = os.getcwd()
     try:
         # Check latest revision and compile (if necessary)
         latest = call_git("describe", version["branch"], output=True).strip()
@@ -111,20 +117,48 @@ def _update_version(version):
                 f.write("#!/bin/sh\n")
                 f.write("exec " + runner_script + ' "' + version["name"] + '" "$@"\n')
             os.chmod(bin_file, 0755)
+
+        # Link logfiles, milestones and rc dirs
+        os.chdir(base_dir)
+        scoring_link_dir = get_path("scoring-link-dir", config, version)
+        if scoring_link_dir:
+            def do_link(filename, folder):
+                if not os.path.isdir(scoring_link_dir):
+                    os.makedirs(scoring_link_dir)
+                os.symlink(os.path.abspath(os.path.join(version_dir, folder, filename)),
+                           os.path.join(scoring_link_dir, filename + ".new"))
+                os.rename(os.path.join(scoring_link_dir, filename + ".new"),
+                          os.path.join(scoring_link_dir, filename))
+            for (file_type, folder) in [("logfile", "shared"),
+                                        ("milestones", "saves")]:
+                do_link(file_type, folder)
+                for game_mode in version.get("game-modes", []):
+                    do_link(file_type + "-" + game_mode, folder)
+
+        rcfile_dir_link = get_path("rcfile-dir-link", config, version)
+        rcfile_dir = get_path("rcfile-dir", config, version)
+        if rcfile_dir_link and rcfile_dir:
+            temp_filename = rcfile_dir_link + ".new"
+            os.symlink(os.path.abspath(rcfile_dir), temp_filename)
+            os.rename(temp_filename, rcfile_dir_link)
+
         return True
     except:
         print "Update of", version["name"], "failed!"
         traceback.print_exc()
         return False
+    finally:
+        os.chdir(old_cwd)
 
 def update(args):
-    config = load_config()
+    config = load_base_config()
+    versions = load_config()
     source_dir = init_source()
     os.chdir(source_dir)
     call_git("fetch", "--all")
     success = True
-    for version in config:
-        success = success and _update_version(version)
+    for version in versions:
+        success = success and _update_version(version, config)
     return 0 if success else 1
 
 def savefile_revision(save_file):
@@ -301,11 +335,6 @@ def clean(args):
             remove_revision(version["name"], rev)
 
         print
-
-def get_path(key, config, version, **kwargs):
-    template = version.get(key, None)
-    template = template or config.get("defaults", {}).get(key, None)
-    return template and template.format(name=version["name"], **kwargs)
 
 def init_user(username):
     config = load_base_config()

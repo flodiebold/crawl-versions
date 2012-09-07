@@ -1,3 +1,4 @@
 name: crawl-0.11
 description: Dungeon Crawl Stone Soup 0.11
 branch: origin/stone_soup-0.11
+game-modes: [sprint, tutorial, zotdef]
