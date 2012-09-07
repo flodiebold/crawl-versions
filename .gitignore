@@ -2,7 +2,7 @@
 /crawl
 /save_backups
 /changelogs
-/bin
+/bin/crawl-*
 /crawl-versions.d
 *.pyc
 *~

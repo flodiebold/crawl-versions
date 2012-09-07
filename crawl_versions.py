@@ -37,6 +37,13 @@ def load_config():
             versions.append(data)
     return versions
 
+def load_base_config():
+    """Loads the config.yml file."""
+    config_file_name = os.path.join(base_dir, "config.yml")
+    with open(config_file_name, "r") as f:
+        contents = f.read()
+        return yaml.load(contents)
+
 def _find_major_version():
     line_start = "#define TAG_MAJOR_VERSION"
     with open("tag-version.h", "r") as f:
@@ -294,9 +301,34 @@ def clean(args):
             remove_revision(version["name"], rev)
 
         print
-    
+
+def get_path(key, config, version, **kwargs):
+    template = version.get(key, None)
+    template = template or config.get("defaults", {}).get(key, None)
+    return template and template.format(name=version["name"], **kwargs)
+
+def init_user(username):
+    config = load_base_config()
+    versions = load_config()
+    for version in versions:
+        def path(key):
+            p = get_path(key, config, version, username=username)
+            if p and not os.path.isdir(p): os.makedirs(p)
+        path("rcfile-dir")
+        path("dgl-inprogress-dir")
+        path("ttyrec-dir")
+        rcfile_dir = get_path("rcfile-dir", config, version, username=username)
+        rcfile_path = os.path.join(rcfile_dir, username + ".rc")
+        if not os.path.isfile(rcfile_path):
+            default_rc = os.path.join(get_crawl_dir(), version["name"],
+                                      "latest", "data", "settings", "init.txt")
+            shutil.copyfile(default_rc, rcfile_path)
+    return 0
 
 if __name__ == "__main__":
+    if os.path.basename(sys.argv[0]) == "init-user":
+        sys.exit(init_user(sys.argv[1]))
+
     parser = argparse.ArgumentParser(description="Manage crawl versions.")
     subparsers = parser.add_subparsers()
 

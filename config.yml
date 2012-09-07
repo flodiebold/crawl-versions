@@ -1,0 +1,4 @@
+defaults:
+  dgl-inprogress-dir: inprogress/{name}
+  ttyrec-dir: ttyrecs/{username}
+  rcfile-dir: rcs/{name}
